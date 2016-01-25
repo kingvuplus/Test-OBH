@@ -14,7 +14,10 @@ service_libenigma_service_a_SOURCES = \
 	service/servicedvbstream.cpp \
 	service/servicehdmi.cpp \
 	service/servicets.cpp \
-	service/servicewebts.cpp
+	service/servicewebts.cpp \
+	service/servicelibpl.cpp \
+	service/servicemp3.cpp \
+	service/servicemp3record.cpp
 
 serviceincludedir = $(pkgincludedir)/lib/service
 serviceinclude_HEADERS = \
@@ -29,21 +32,24 @@ serviceinclude_HEADERS = \
 	service/servicedvbstream.h \
 	service/servicehdmi.h \
 	service/servicets.h \
-	service/servicewebts.h
-
-if ENABLE_LIBEPLAYER3
-service_libenigma_service_a_SOURCES += \
-	service/servicelibpl.cpp
-serviceinclude_HEADERS += \
-	service/servicelibpl.h 
-else
-service_libenigma_service_a_SOURCES += \
-	service/servicemp3.cpp \
-	service/servicemp3record.cpp
-serviceinclude_HEADERS += \
-	service/servicemp3.h \
+	service/servicewebts.h \
+	service/servicelibpl.h \
+	service/servicemp3record.h \
 	service/servicemp3record.h
-endif
+
+#if ENABLE_LIBEPLAYER3
+#service_libenigma_service_a_SOURCES += \
+#	service/servicelibpl.cpp
+#serviceinclude_HEADERS += \
+#	service/servicelibpl.h 
+#else
+#service_libenigma_service_a_SOURCES += \
+#	service/servicemp3.cpp \
+#	service/servicemp3record.cpp
+#serviceinclude_HEADERS += \
+#	service/servicemp3.h \
+#	service/servicemp3record.h
+#endif
 
 if HAVE_LIBXINE
 service_libenigma_service_a_SOURCES += \
