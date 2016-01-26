@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys, os, time
 from Tools.HardwareInfo import HardwareInfo
-from enigma import getBoxType
+#from enigma import getBoxType
 
 def getVersionString():
 	return getImageVersionString()
@@ -42,17 +42,17 @@ def getKernelVersionString():
 	except:
 		return _("unknown")
 		
-def getChipSetString():
-	if getBoxType() in ('dm7080','dm820'):
-		return "7435"
-	else:
-		try:
-			f = open('/proc/stb/info/chipset', 'r')
-			chipset = f.read()
-			f.close()
-			return str(chipset.lower().replace('\n','').replace('bcm','').replace('brcm','').replace('sti',''))
-		except IOError:
-			return "unavailable"		
+#def getChipSetString():
+#	if getBoxType() in ('dm7080','dm820'):
+#		return "7435"
+#	else:
+#		try:
+#			f = open('/proc/stb/info/chipset', 'r')
+#			chipset = f.read()
+#			f.close()
+#			return str(chipset.lower().replace('\n','').replace('bcm','').replace('brcm','').replace('sti',''))
+#		except IOError:
+#			return "unavailable"		
 
 def getHardwareTypeString():
 	return HardwareInfo().get_device_string()
