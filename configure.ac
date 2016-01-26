@@ -70,12 +70,12 @@ dnl versions of gstreamer and plugins-base
 AC_ARG_WITH(gstversion,
 	AS_HELP_STRING([--with-gstversion],[use gstreamer version (major.minor)]),
 	[GST_MAJORMINOR=$withval],[GST_MAJORMINOR=0.10])
-fi	
 
 PKG_CHECK_MODULES(GSTREAMER, gstreamer-$GST_MAJORMINOR gstreamer-pbutils-$GST_MAJORMINOR)
 PKG_CHECK_MODULES(BASE, [freetype2 fribidi gstreamer-$GST_MAJORMINOR gstreamer-pbutils-$GST_MAJORMINOR libdvbsi++ libpng libxml-2.0 sigc++-1.2 libssl libcrypto glib-2.0])
 else
 PKG_CHECK_MODULES(BASE, [freetype2 fribidi libdvbsi++ libpng libxml-2.0 sigc++-1.2 libssl libcrypto glib-2.0])
+fi
 
 AM_CONDITIONAL(HAVE_LIBDDVD, test "$HAVE_LIBDDVD" = "yes")
 
@@ -244,6 +244,12 @@ data/extensions/Makefile
 data/keymaps/Makefile
 data/hw_info/Makefile
 data/rc_models/Makefile
+data/skin_default/Makefile
+data/skin_default/menu/Makefile
+data/skin_default/icons/Makefile
+data/skin_default/buttons/Makefile
+data/skin_default/spinner/Makefile
+data/skin_default/LCDIcons/Makefile
 include/Makefile
 lib/Makefile
 lib/base/eenv.cpp
