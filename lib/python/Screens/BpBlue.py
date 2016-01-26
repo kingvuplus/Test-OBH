@@ -316,7 +316,7 @@ class BhsysInfo(Screen):
 		text += "\n" + _("FIRMWARE") + "\n"
                 text += "Image v.: \t" +  about.getImageTypeString() + "\n"
 #		text += "OpenGl v.: \t" +  _("GLS 2.0 ") + "\n"
-                text += "OE CORE v.: \t" +  _("Alliance 3.1 ") + "\n"
+                text += "OE CORE v.: \t" +  _("OPENPLI 5.0 ") + "\n"
 		
 		self["lab1"].setText(text)
 		
