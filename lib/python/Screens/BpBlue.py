@@ -269,9 +269,9 @@ class BhsysInfo(Screen):
 		f = open("/proc/stb/info/boxtype",'r')
  		text += _("Model:\t") + f.readline()
  		f.close()
-		f = open("/proc/stb/info/chipset",'r')
- 		text += _("Chipset:\t") + f.readline() +"\n"
- 		f.close()
+#		f = open("/proc/stb/info/chipset",'r')
+# 		text += _("Chipset:\t") + f.readline() +"\n"
+#		f.close()
 		text += _("MEMORY\n")
 		memTotal = memFree = swapTotal = swapFree = 0
 		for line in open("/proc/meminfo",'r'):
@@ -317,6 +317,9 @@ class BhsysInfo(Screen):
                 text += "Image v.: \t" +  about.getImageTypeString() + "\n"
 #		text += "OpenGl v.: \t" +  _("GLS 2.0 ") + "\n"
                 text += "OE CORE v.: \t" +  _("OPENPLI 5.0 ") + "\n"
+                text += "CODER N.: \t" +  _("SODO ") + "\n"
+                text += "BETA TESTER N.1: \t" +  _("YOUSSEF EL-ARABI ") + "\n"
+                text += "BETA TESTER N.2: \t" +  _("POP-AZERTY ") + "\n"
 		
 		self["lab1"].setText(text)
 		
