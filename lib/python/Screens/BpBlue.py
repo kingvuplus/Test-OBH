@@ -188,8 +188,12 @@ class DeliteBluePanel(Screen):
 		self.session.open(MessageBox, _("Sorry, function not available"), MessageBox.TYPE_INFO)
 		
 	def keyRed(self):
-		from Plugins.SystemPlugins.CrossEPG.crossepg_main import crossepg_main
-		crossepg_main.setup(self.session)
+		if fileExists("/usr/lib/enigma2/python/Plugins/SystemPlugins/CrossEPG/plugin.pyo"):
+		   from Plugins.SystemPlugins.CrossEPG.crossepg_main import crossepg_main
+		   crossepg_main.setup(self.session)
+		   
+		else:
+		   self.session.open(MessageBox, _("Sorry, Epg function not available For your spark But you can install it manually If You Want And Try To Run It Again"), MessageBox.TYPE_INFO)	
 
 	def myclose(self):
 		self.close()
