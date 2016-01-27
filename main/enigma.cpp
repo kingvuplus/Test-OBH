@@ -275,7 +275,7 @@ int main(int argc, char **argv)
 					else
 					{
 						def = true;
-						path = "${datadir}/enigma2/MX_HQ8";
+						path = "${datadir}/enigma2/skin_default";
 						continue;
 					}
 				}
