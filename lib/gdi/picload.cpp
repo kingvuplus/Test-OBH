@@ -4,10 +4,9 @@
 
 #include <lib/base/cfile.h>
 #include <lib/gdi/picload.h>
+#include "libmmeimage/libmmeimage.h"
 
 extern "C" {
-#define HAVE_BOOLEAN
-#define boolean int
 #include <jpeglib.h>
 #include <gif_lib.h>
 }
@@ -429,7 +428,7 @@ static int jpeg_save(const char * filename, int ox, int oy, unsigned char *pic_b
 	cinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_compress(&cinfo);
 
-	eDebug("[ePicLoad] save Thumbnail... %s",filename);
+	//eDebug("[ePicLoad] save Thumbnail... %s",filename);
 
 	jpeg_stdio_dest(&cinfo, outfile);
 
@@ -469,7 +468,7 @@ inline void m_rend_gif_decodecolormap(unsigned char *cmb, unsigned char *rgbb, C
 static void gif_load(Cfilepara* filepara, bool forceRGB = false)
 {
 	unsigned char *pic_buffer = NULL;
-	int px, py, i, j;
+	int px, py, i, j, ErrorCode;
 	unsigned char *slb=NULL;
 	GifFileType *gft;
 	GifRecordType rt;
@@ -478,9 +477,11 @@ static void gif_load(Cfilepara* filepara, bool forceRGB = false)
 	int cmaps;
 	int extcode;
 
-	gft = DGifOpenFileName(filepara->file);
-	if (gft == NULL)
+	gft = DGifOpenFileName(filepara->file, &ErrorCode);
+	if (gft == NULL) {
+		eDebug("[Picload] Error open gif %i", ErrorCode);
 		return;
+	}
 	do
 	{
 		if (DGifGetRecordType(gft, &rt) == GIF_ERROR)
@@ -568,11 +569,11 @@ static void gif_load(Cfilepara* filepara, bool forceRGB = false)
 	}
 	while (rt != TERMINATE_RECORD_TYPE);
 
-	DGifCloseFile(gft);
+	DGifCloseFile(gft, &ErrorCode);
 	return;
 ERROR_R:
 	eDebug("[ePicLoad] <Error gif>");
-	DGifCloseFile(gft);
+	DGifCloseFile(gft, &ErrorCode);
 }
 
 //---------------------------------------------------------------------------------------------
@@ -634,9 +635,39 @@ void ePicLoad::thread()
 
 void ePicLoad::decodePic()
 {
-	eDebug("[ePicLoad] decode picture... %s", m_filepara->file);
-
 	getExif(m_filepara->file, m_filepara->id);
+
+	if (m_filepara->id == F_JPEG)
+	{
+		//eDebug("[ePicLoad] hardware decode picture... %s", m_filepara->file);
+		m_filepara->pic_buffer = NULL;
+		FILE *fp;
+
+		if (!(fp = fopen(m_filepara->file, "rb")))
+			return; // software decode won't find the file either...
+
+		if (get_jpeg_img_size(fp, (unsigned int *)&m_filepara->ox, (unsigned int *)&m_filepara->oy) == LIBMMEIMG_SUCCESS)
+		{
+			// to get the best picture quality even if it rotated later
+			float scale = (float)(m_filepara->max_x > m_filepara->max_y ? m_filepara->max_x : m_filepara->max_y) / (m_filepara->ox > m_filepara->oy ? m_filepara->ox : m_filepara->oy);
+			int imx = (int)(m_filepara->ox * scale);
+			int imy = (int)(m_filepara->oy * scale);
+
+			if (decode_jpeg(fp, m_filepara->ox, m_filepara->oy, imx, imy, (char **)&m_filepara->pic_buffer) == LIBMMEIMG_SUCCESS)
+			{
+				m_filepara->ox = imx;
+				m_filepara->oy = imy;
+				fclose(fp);
+				return;
+			}
+		}
+		eDebug("[ePicLoad] hardware decode error");
+		fclose(fp);
+		m_filepara->pic_buffer = NULL;
+	}
+
+	//eDebug("[ePicLoad] decode picture... %s", m_filepara->file);
+
 	switch(m_filepara->id)
 	{
 		case F_PNG:	png_load(m_filepara, m_conf.background);
@@ -652,7 +683,7 @@ void ePicLoad::decodePic()
 
 void ePicLoad::decodeThumb()
 {
-	eDebug("[ePicLoad] get Thumbnail... %s", m_filepara->file);
+	//eDebug("[ePicLoad] get Thumbnail... %s",m_filepara->file);
 
 	bool exif_thumbnail = false;
 	bool cachefile_found = false;
@@ -668,7 +699,7 @@ void ePicLoad::decodeThumb()
 			m_filepara->file = strdup(THUMBNAILTMPFILE);
 			m_filepara->id = F_JPEG; // imbedded thumbnail seem to be jpeg
 			exif_thumbnail = true;
-			eDebug("[ePicLoad] decodeThumb: Exif Thumbnail found");
+			//eDebug("[ePicLoad] decodeThumb: Exif Thumbnail found");
 		}
 		//else
 		//	eDebug("[ePicLoad] decodeThumb: NO Exif Thumbnail found");
@@ -679,8 +710,8 @@ void ePicLoad::decodeThumb()
 		snprintf(buf, 20, "%d x %d", m_exif->m_exifinfo->Width, m_exif->m_exifinfo->Height);
 		m_filepara->addExifInfo(buf);
 	}
-	else
-		eDebug("[ePicLoad] decodeThumb: NO Exif info");
+	//else
+	//	eDebug("[ePicLoad] decodeThumb: NO Exif info");
 
 	if (!exif_thumbnail && m_conf.usecache)
 	{
@@ -711,13 +742,56 @@ void ePicLoad::decodeThumb()
 				free(m_filepara->file);
 				m_filepara->file = strdup(cachefile.c_str());
 				m_filepara->id = F_JPEG;
-				eDebug("[ePicLoad] Cache File %s found", cachefile.c_str());
+				//eDebug("[ePicLoad] Cache File %s found", cachefile.c_str());
 			}
 		}
 	}
 
-	switch (m_filepara->id)
+	int hw_decoded = 0;
+	if (m_filepara->id == F_JPEG)
 	{
+		//eDebug("[Picload] hardware decode picture... %s",m_filepara->file);
+		m_filepara->pic_buffer = NULL;
+		FILE *fp;
+
+		if (!(fp = fopen(m_filepara->file, "rb")))
+			return; // software decode won't find the file either...
+		
+		if (get_jpeg_img_size(fp, (unsigned int *)&m_filepara->ox, (unsigned int *)&m_filepara->oy) == LIBMMEIMG_SUCCESS)
+		{
+			int imx, imy;
+			if (m_filepara->ox <= m_filepara->oy)
+			{
+				imy = m_conf.thumbnailsize;
+				imx = (int)( (m_conf.thumbnailsize * ((double)m_filepara->ox)) / ((double)m_filepara->oy) );
+			}
+			else
+			{
+				imx = m_conf.thumbnailsize;
+				imy = (int)( (m_conf.thumbnailsize * ((double)m_filepara->oy)) / ((double)m_filepara->ox) );
+			}
+			
+			if (decode_jpeg(fp, m_filepara->ox, m_filepara->oy, imx, imy, (char **)&m_filepara->pic_buffer) == LIBMMEIMG_SUCCESS)
+			{
+				m_filepara->ox = imx;
+				m_filepara->oy = imy;
+				fclose(fp);
+				hw_decoded = 1;
+			}
+		}
+
+		if (!hw_decoded)
+		{
+			eDebug("hardware decode error");
+		
+			fclose(fp);
+		}
+	}
+
+	if (!hw_decoded)
+	{
+		switch(m_filepara->id)
+		{
 		case F_PNG:	png_load(m_filepara, m_conf.background, true);
 				break;
 		case F_JPEG:	m_filepara->pic_buffer = jpeg_load(m_filepara->file, &m_filepara->ox, &m_filepara->oy, m_filepara->max_x, m_filepara->max_y);
@@ -726,6 +800,7 @@ void ePicLoad::decodeThumb()
 				break;
 		case F_GIF:	gif_load(m_filepara, true);
 				break;
+		}
 	}
 	//eDebug("[ePicLoad] getThumb picture loaded %s", m_filepara->file);
 
@@ -741,22 +816,26 @@ void ePicLoad::decodeThumb()
 				::mkdir(cachedir.c_str(), 0755);
 
 			// Resize for Thumbnail
-			int imx, imy;
-			if (m_filepara->ox <= m_filepara->oy)
+			if(!hw_decoded)
 			{
-				imy = m_conf.thumbnailsize;
-				imx = (int)( (m_conf.thumbnailsize * ((double)m_filepara->ox)) / ((double)m_filepara->oy) );
-			}
-			else
-			{
-				imx = m_conf.thumbnailsize;
-				imy = (int)( (m_conf.thumbnailsize * ((double)m_filepara->oy)) / ((double)m_filepara->ox) );
-			}
+			
+				int imx, imy;
+				if (m_filepara->ox <= m_filepara->oy)
+				{
+					imy = m_conf.thumbnailsize;
+					imx = (int)( (m_conf.thumbnailsize * ((double)m_filepara->ox)) / ((double)m_filepara->oy) );
+				}
+				else
+				{
+					imx = m_conf.thumbnailsize;
+					imy = (int)( (m_conf.thumbnailsize * ((double)m_filepara->oy)) / ((double)m_filepara->ox) );
+				}
 
 			// eDebug("[ePicLoad] getThumb resize from %dx%d to %dx%d", m_filepara->ox, m_filepara->oy, imx, imy);
-			m_filepara->pic_buffer = color_resize(m_filepara->pic_buffer, m_filepara->ox, m_filepara->oy, imx, imy);
-			m_filepara->ox = imx;
-			m_filepara->oy = imy;
+				m_filepara->pic_buffer = color_resize(m_filepara->pic_buffer, m_filepara->ox, m_filepara->oy, imx, imy);
+				m_filepara->ox = imx;
+				m_filepara->oy = imy;
+			}
 
 			if (jpeg_save(cachefile.c_str(), m_filepara->ox, m_filepara->oy, m_filepara->pic_buffer))
 				eDebug("[ePicLoad] getThumb: error saving cachefile");
@@ -777,7 +856,7 @@ void ePicLoad::gotMessage(const Message &msg)
 			msg_main.send(Message(Message::decode_finished));
 			break;
 		case Message::quit: // called from decode thread
-			eDebug("[ePicLoad] decode thread ... got quit msg");
+			//eDebug("[ePicLoad] decode thread ... got quit msg");
 			quit(0);
 			break;
 		case Message::decode_finished: // called from main thread
@@ -807,7 +886,7 @@ int ePicLoad::startThread(int what, const char *file, int x, int y, bool async)
 {
 	if(async && threadrunning && m_filepara != NULL)
 	{
-		eDebug("[ePicLoad] thread running");
+		//eDebug("[ePicLoad] thread running");
 		m_filepara->callback = false;
 		return 1;
 	}
@@ -1007,43 +1086,58 @@ int ePicLoad::getData(ePtr<gPixmap> &result)
 	if (xoff != 0 || yoff != 0) {
 		unsigned int background;
 		if (m_filepara->bits == 8) {
-			gRGB bg(m_conf.background);
+			gRGB bg(m_conf.background | 0xFF000000);
 			background = surface->clut.findColor(bg);
+
+			if (yoff != 0) {
+				memset(tmp_buffer, background, yoff * surface->stride);
+				memset(tmp_buffer + (yoff + scry) * surface->stride, background,
+					(m_filepara->max_y - scry - yoff) * surface->stride);
+			}
+
+			if (xoff != 0) {
+				#pragma omp parallel for
+				for(int y = yoff; y < scry; ++y) {
+					memset(tmp_buffer + y * surface->stride, background, xoff);
+					memset(tmp_buffer + y * surface->stride + xoff + scrx, background,
+						(m_filepara->max_x - scrx - xoff));
+				}
+                        }
 		}
 		else {
 			background = m_conf.background;
-		}
-		unsigned int* row_buffer;
-		if (yoff != 0) {
-			row_buffer = (unsigned int *) tmp_buffer;
-			for (int x = 0; x < m_filepara->max_x; ++x) // fill first line
-				*row_buffer++ = background;
-			int y;
-			#pragma omp parallel for
-			for (y = 1; y < yoff; ++y) // copy from first line
-				memcpy(tmp_buffer + y*surface->stride, tmp_buffer,
-					m_filepara->max_x * surface->bypp);
-			#pragma omp parallel for
-			for (y = yoff + scry; y < m_filepara->max_y; ++y)
-				memcpy(tmp_buffer + y * surface->stride, tmp_buffer,
-					m_filepara->max_x * surface->bypp);
-		}
-		if (xoff != 0) {
-			row_buffer = (unsigned int *) (tmp_buffer + yoff * surface->stride);
-			int x;
-			for (x = 0; x < xoff; ++x) // fill left side of first line
-				*row_buffer++ = background;
-			row_buffer += scrx;
-			for (x = xoff + scrx; x < m_filepara->max_x; ++x) // fill right side of first line
-				*row_buffer++ = background;
-			#pragma omp parallel for
-			for (int y = yoff + 1; y < scry; ++y) { // copy from first line
-				memcpy(tmp_buffer + y*surface->stride,
-					tmp_buffer + yoff * surface->stride,
-					xoff * surface->bypp);
-				memcpy(tmp_buffer + y*surface->stride + (xoff + scrx) * surface->bypp,
-					tmp_buffer + yoff * surface->stride + (xoff + scrx) * surface->bypp,
-					(m_filepara->max_x - scrx - xoff) * surface->bypp);
+			unsigned int* row_buffer;
+			if (yoff != 0) {
+				row_buffer = (unsigned int *) tmp_buffer;
+				for (int x = 0; x < m_filepara->max_x; ++x) // fill first line
+					*row_buffer++ = background;
+				int y;
+				#pragma omp parallel for
+				for (y = 1; y < yoff; ++y) // copy from first line
+					memcpy(tmp_buffer + y*surface->stride, tmp_buffer,
+						m_filepara->max_x * surface->bypp);
+				#pragma omp parallel for
+				for (y = yoff + scry; y < m_filepara->max_y; ++y)
+					memcpy(tmp_buffer + y * surface->stride, tmp_buffer,
+						m_filepara->max_x * surface->bypp);
+			}
+			if (xoff != 0) {
+				row_buffer = (unsigned int *) (tmp_buffer + yoff * surface->stride);
+				int x;
+				for (x = 0; x < xoff; ++x) // fill left side of first line
+					*row_buffer++ = background;
+				row_buffer += scrx;
+				for (x = xoff + scrx; x < m_filepara->max_x; ++x) // fill right side of first line
+					*row_buffer++ = background;
+				#pragma omp parallel for
+				for (int y = yoff + 1; y < scry; ++y) { // copy from first line
+					memcpy(tmp_buffer + y*surface->stride,
+						tmp_buffer + yoff * surface->stride,
+						xoff * surface->bypp);
+					memcpy(tmp_buffer + y*surface->stride + (xoff + scrx) * surface->bypp,
+						tmp_buffer + yoff * surface->stride + (xoff + scrx) * surface->bypp,
+						(m_filepara->max_x - scrx - xoff) * surface->bypp);
+				}
 			}
 		}
 		tmp_buffer += yoff * surface->stride + xoff * surface->bypp;
@@ -1235,10 +1329,10 @@ RESULT ePicLoad::setPara(int width, int height, double aspectRatio, int as, bool
 	m_conf.resizetype = resizeType;
 
 	if(bg_str[0] == '#' && strlen(bg_str)==9)
-		m_conf.background = strtoul(bg_str+1, NULL, 16) | 0xFF000000;
-	eDebug("[ePicLoad] setPara max-X=%d max-Y=%d aspect_ratio=%lf cache=%d resize=%d bg=#%08X auto_orient=%d",
-			m_conf.max_x, m_conf.max_y, m_conf.aspect_ratio,
-			(int)m_conf.usecache, (int)m_conf.resizetype, m_conf.background, m_conf.auto_orientation);
+		m_conf.background = strtoul(bg_str+1, NULL, 16);
+//	eDebug("[ePicLoad] setPara max-X=%d max-Y=%d aspect_ratio=%lf cache=%d resize=%d bg=#%08X auto_orient=%d",
+//			m_conf.max_x, m_conf.max_y, m_conf.aspect_ratio,
+//			(int)m_conf.usecache, (int)m_conf.resizetype, m_conf.background, m_conf.auto_orientation);
 	return 1;
 }
 
